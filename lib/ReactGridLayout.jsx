@@ -58,6 +58,7 @@ export type Props = {
   draggableCancel: string,
   draggableHandle: string,
   verticalCompact: boolean,
+
   compactType: CompactType,
   layout: Layout,
   margin: [number, number],
@@ -71,6 +72,7 @@ export type Props = {
   useCSSTransforms: boolean,
   transformScale: number,
   droppingItem: $Shape<LayoutItem>,
+  autoOffset: boolean,
 
   // Callbacks
   onLayoutChange: Layout => void,
@@ -177,6 +179,9 @@ export default class ReactGridLayout extends React.Component<Props, State> {
     // an item past the barrier. They can push items beyond the barrier, though.
     // Intentionally not documented for this reason.
     maxRows: PropTypes.number,
+    // A offset that allows to readjust the droppable area. Useful for relative or absolute positioned
+    // containers.
+    autoOffset: PropTypes.bool,
 
     //
     // Flags
@@ -269,6 +274,7 @@ export default class ReactGridLayout extends React.Component<Props, State> {
       h: 1,
       w: 1
     },
+    autoOffset: false,
     onLayoutChange: noop,
     onDragStart: noop,
     onDrag: noop,
@@ -716,6 +722,29 @@ export default class ReactGridLayout extends React.Component<Props, State> {
     );
   }
 
+  getOffset = (e: DragOverEvent) => {
+    const { autoOffset } = this.props;
+    var el = e.target,
+      x = 0,
+      y = 0;
+
+    while (el && !isNaN(el.offsetLeft) && !isNaN(el.offsetTop)) {
+      x += el.offsetLeft - el.scrollLeft;
+      y += el.offsetTop - el.scrollTop;
+      el = el.offsetParent;
+    }
+
+    x = e.clientX - x;
+    y = e.clientY - y;
+
+    if (autoOffset) {
+      if (x < 0) x = e.clientX;
+      if (y < 0) y = e.clientY;
+    }
+
+    return { x: x, y: y };
+  };
+
   onDragOver = (e: DragOverEvent) => {
     // we should ignore events from layout's children in Firefox
     // to avoid unpredictable jumping of a dropping placeholder
@@ -728,8 +757,7 @@ export default class ReactGridLayout extends React.Component<Props, State> {
 
     const { droppingItem } = this.props;
     const { layout } = this.state;
-    const { layerX, layerY } = e.nativeEvent;
-    const droppingPosition = { x: layerX, y: layerY, e };
+    const droppingPosition = { ...this.getOffset(e.nativeEvent), e };
 
     if (!this.state.droppingDOMNode) {
       this.setState({
@@ -748,8 +776,8 @@ export default class ReactGridLayout extends React.Component<Props, State> {
       });
     } else if (this.state.droppingPosition) {
       const shouldUpdatePosition =
-        this.state.droppingPosition.x != layerX ||
-        this.state.droppingPosition.y != layerY;
+        this.state.droppingPosition.x != droppingPosition.x ||
+        this.state.droppingPosition.y != droppingPosition.y;
       shouldUpdatePosition && this.setState({ droppingPosition });
     }
 
